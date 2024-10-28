@@ -37,6 +37,10 @@ contract ZiniSavings is ReentrancyGuard {
     error BorrowLimitExceeed();
     error No_OutStandingLoan();
     error OutStandingLoanNotRepaid();
+    error InvalidToken();
+    error TokenNotSupported();
+    error ContributionAlreadySet();
+    error GROUP_IS_NOT_ELIGIBLE();
 
     ///////////////////////////
     // Type of  contract    //
@@ -67,6 +71,8 @@ contract ZiniSavings is ReentrancyGuard {
         uint256 memberCount;
         uint256 loanRepaymentDuration;
         uint256 loanCycleCount;
+        bool isContributionSet; // Added: Track if contribution is set
+        IERC20 groupToken; // Will be set when monthly contribution is set
         mapping(address => Member) addressToMember;
         mapping(address => uint) memberSavings;
         mapping(address => bool) hasReceivedLoan;
@@ -88,17 +94,19 @@ contract ZiniSavings is ReentrancyGuard {
         bool fullyRepaid;
         bool isFirstBatch;
         bool isSecondBatch;
+        IERC20 loanToken;
     }
 
     ///////////////////////////
     // State Variables    //
     //////////////////////////
-    IERC20 public immutable token;
+    // IERC20 public immutable token;
+    mapping(address => bool) public supportedTokens;
     mapping(int256 => Group) public groups;
     mapping(address => int256[]) private userGroups;
-    mapping(address => uint256) public usersTotalSavings;
+    mapping(address => mapping(address => uint256)) public usersTotalSavings; // Modified: Track savings per token
     mapping(address => CreditScore) public creditScores;
-    mapping(address => uint256) public flexLoans;
+    mapping(address => mapping(address => uint256)) public flexLoans;
     uint256 public groupCount;
     int256[] public groupIds;
     mapping(address => mapping(int256 => Loan)) public loans;
@@ -114,7 +122,10 @@ contract ZiniSavings is ReentrancyGuard {
     ///////////////////////////
     // Events               //
     //////////////////////////
+    event TokenAdded(address indexed token);
+    event TokenRemoved(address indexed token);
     event GroupCreated(int256 indexed groupId, string name, address admin);
+    event MonthlyContributionSet(int256 indexed groupId, uint256 amount);
     event MemberJoined(int256 indexed groupId, address indexed member);
     event FlexLoanTransferred(
         address indexed recipient,
@@ -140,6 +151,7 @@ contract ZiniSavings is ReentrancyGuard {
         int256 indexed groupId,
         address indexed borrower,
         uint256 indexed amount,
+        address token,
         bool isFirstBatch
     );
     event LoanRepayment(
@@ -149,10 +161,24 @@ contract ZiniSavings is ReentrancyGuard {
     );
 
     ///////////////////////////
-    // Functions             //
+    // Constructor & Admin    //
     //////////////////////////
-    constructor(address _token) {
-        token = IERC20(_token);
+    constructor(address[] memory _initialTokens) {
+        for (uint i = 0; i < _initialTokens.length; i++) {
+            supportedTokens[_initialTokens[i]] = true;
+            emit TokenAdded(_initialTokens[i]);
+        }
+    }
+
+    function addSupportedToken(address _token) external {
+        require(_token != address(0), "Invalid token address");
+        supportedTokens[_token] = true;
+        emit TokenAdded(_token);
+    }
+
+    function removeSupportedToken(address _token) external {
+        supportedTokens[_token] = false;
+        emit TokenRemoved(_token);
     }
 
     ///////////////////////////
@@ -168,6 +194,7 @@ contract ZiniSavings is ReentrancyGuard {
         newGroup.creationTime = block.timestamp;
         newGroup.name = _name;
         newGroup.admin = user;
+        newGroup.isContributionSet = false; // Initialize as false
         _joinGroup(_groupId, user);
         groupCount++;
         groupIds.push(_groupId);
@@ -175,9 +202,23 @@ contract ZiniSavings is ReentrancyGuard {
         emit GroupCreated(_groupId, _name, msg.sender);
     }
 
+    function setGroupContributionToken(
+        int256 _groupId,
+        address _tokenAddress
+    ) public {
+        if (!supportedTokens[_tokenAddress]) revert TokenNotSupported();
+
+        Group storage group = groups[_groupId];
+        group.groupToken = IERC20(_tokenAddress);
+    }
+
     function setMonthlyContribution(int256 _groupId, uint256 _amount) external {
         Group storage group = groups[_groupId];
+        if (group.isContributionSet) revert ContributionAlreadySet();
         group.monthlyContribution = _amount;
+        group.isContributionSet = true;
+
+        emit MonthlyContributionSet(_groupId, _amount);
     }
 
     function setRepaymentDuration(int256 _groupId, uint256 _time) external {}
@@ -186,31 +227,36 @@ contract ZiniSavings is ReentrancyGuard {
         _joinGroup(_groupId, user);
     }
 
-    function requestFlexLoan(uint256 amount) public {
+    function requestFlexLoan(uint256 amount, address _tokenAddress) public {
+        if (!supportedTokens[_tokenAddress]) revert TokenNotSupported();
+        IERC20 token = IERC20(_tokenAddress);
+
         uint256 maxAmount = getMaxLoanAmount(msg.sender);
         if (amount > maxAmount) {
             revert BorrowLimitExceeed();
         }
-        if (flexLoans[msg.sender] > 0) {
+        if (flexLoans[_tokenAddress][msg.sender] > 0) {
             revert OutStandingLoanNotRepaid();
         }
 
         uint256 interestRate = getLoanInterestRate(msg.sender);
         uint256 totalRepaymentAmount = amount + ((amount * interestRate) / 100);
 
-        // Track the loan
-        flexLoans[msg.sender] += totalRepaymentAmount;
+        flexLoans[_tokenAddress][msg.sender] += totalRepaymentAmount;
         creditScores[msg.sender].totalLoans += 1;
         token.transfer(msg.sender, amount);
 
         emit FlexLoanTransferred(msg.sender, amount);
     }
 
-    function repayFlexLoan(uint256 amount) public {
-        if (flexLoans[msg.sender] < 0) {
+    function repayFlexLoan(uint256 amount, address _tokenAddress) public {
+        if (!supportedTokens[_tokenAddress]) revert TokenNotSupported();
+        IERC20 token = IERC20(_tokenAddress);
+
+        if (flexLoans[_tokenAddress][msg.sender] < 0) {
             revert No_OutStandingLoan();
         }
-        flexLoans[msg.sender] -= amount;
+        flexLoans[_tokenAddress][msg.sender] -= amount;
         creditScores[msg.sender].repaidLoans += 1;
         token.safeTransferFrom(msg.sender, address(this), amount);
         emit FlexLoanRepaid(msg.sender, amount);
@@ -218,6 +264,8 @@ contract ZiniSavings is ReentrancyGuard {
 
     function deposit(int256 _groupId) public payable {
         Group storage group = groups[_groupId];
+        require(group.isContributionSet, "Monthly contribution not set");
+        IERC20 token = group.groupToken;
         require(
             token.balanceOf(msg.sender) >= group.monthlyContribution,
             "Insufficient balance"
@@ -231,7 +279,7 @@ contract ZiniSavings is ReentrancyGuard {
         group.memberSavings[msg.sender] = group.memberSavings[
             msg.sender
         ] += group.monthlyContribution;
-        usersTotalSavings[msg.sender] = usersTotalSavings[msg.sender] += group
+        usersTotalSavings[address(token)][msg.sender] += group
             .monthlyContribution;
         creditScores[msg.sender].totalSavings += group.monthlyContribution;
 
@@ -241,59 +289,66 @@ contract ZiniSavings is ReentrancyGuard {
     // Follow CEI = Check Effect Interactions
     function withdrawFromGroup(int256 _groupId, uint256 _amount) public {
         Group storage group = groups[_groupId];
+
         require(group.memberSavings[msg.sender] >= _amount, "Low Savings");
+        IERC20 token = group.groupToken;
         group.memberSavings[msg.sender] -= _amount;
         emit SavingsWithdraw(_groupId, msg.sender, _amount);
         token.transfer(msg.sender, _amount);
     }
 
-    function checkUpkeep(
-        bytes calldata /* checkData */
-    )
-        external
-        view
-        returns (
-            // override
-            bool upkeepNeeded,
-            bytes memory performData
-        )
-    {
-        int256[] memory eligibleGroups = new int256[](groupCount);
-        uint256 eligibleCount = 0;
+    // function checkUpkeep(
+    //     bytes calldata /* checkData */
+    // )
+    //     external
+    //     view
+    //     returns (
+    //         // override
+    //         bool upkeepNeeded,
+    //         bytes memory performData
+    //     )
+    // {
+    //     int256[] memory eligibleGroups = new int256[](groupCount);
+    //     uint256 eligibleCount = 0;
 
-        for (uint i = 0; i < groupCount; ++i) {
-            int256 groupId = groupIds[i];
-            Group storage group = groups[groupId];
-            if (isGroupEligibleForLoanDistribution(group)) {
-                eligibleGroups[eligibleCount] = groupId;
-                eligibleCount++;
-            }
-        }
-        upkeepNeeded = eligibleCount > 0;
-        performData = abi.encode(eligibleGroups, eligibleCount);
-        return (upkeepNeeded, performData);
-    }
+    //     for (uint i = 0; i < groupCount; ++i) {
+    //         int256 groupId = groupIds[i];
+    //         Group storage group = groups[groupId];
+    //         if (isGroupEligibleForLoanDistribution(group)) {
+    //             eligibleGroups[eligibleCount] = groupId;
+    //             eligibleCount++;
+    //         }
+    //     }
+    //     upkeepNeeded = eligibleCount > 0;
+    //     performData = abi.encode(eligibleGroups, eligibleCount);
+    //     return (upkeepNeeded, performData);
+    // }
 
-    function performUpkeep(bytes calldata performData) external // override
-    {
-        (int256[] memory eligibleGroups, uint256 eligibleCount) = abi.decode(
-            performData,
-            (int256[], uint256)
-        );
+    // function performUpkeep(
+    //     bytes calldata performData // override
+    // ) external {
+    //     (int256[] memory eligibleGroups, uint256 eligibleCount) = abi.decode(
+    //         performData,
+    //         (int256[], uint256)
+    //     );
 
-        for (uint i = 0; i < eligibleCount; i++) {
-            int256 groupId = eligibleGroups[i];
-            Group storage group = groups[groupId];
-            console.log(isGroupEligibleForLoanDistribution(group));
+    //     for (uint i = 0; i < eligibleCount; i++) {
+    //         int256 groupId = eligibleGroups[i];
+    //         Group storage group = groups[groupId];
+    //         console.log(isGroupEligibleForLoanDistribution(group));
 
-            if (isGroupEligibleForLoanDistribution(group)) {
-                distributeLoanForGroup(groupId);
-            }
-        }
-    }
+    //         if (isGroupEligibleForLoanDistribution(group)) {
+    //             distributeLoanForGroup(groupId);
+    //         }
+    //     }
+    // }
 
-    function distributeLoanForGroup(int256 _groupId) internal {
+    function distributeLoanForGroup(int256 _groupId) external {
         Group storage group = groups[_groupId];
+
+        if (!isGroupEligibleForLoanDistribution(group)) {
+            revert GROUP_IS_NOT_ELIGIBLE();
+        }
         uint256 halfGroupSize = group.memberCount / 2;
         uint256 totalLoanAmount = group.totalSavings;
         uint256 individualLoanAmount = (totalLoanAmount / group.memberCount) *
@@ -330,7 +385,7 @@ contract ZiniSavings is ReentrancyGuard {
         require(loan.totalAmount > 0, "No active loan");
         require(!loan.fullyRepaid, "Loan already repaid");
         // uint256 amountDue = loan.monthlyPayment;
-
+        IERC20 token = group.groupToken;
         token.safeTransferFrom(msg.sender, address(this), _amount);
         loan.amountRepaid += _amount;
         loan.debt = loan.debt - _amount;
@@ -360,10 +415,10 @@ contract ZiniSavings is ReentrancyGuard {
         }
     }
 
-    function getTestTokens() public {
-        uint256 AIR_DROP = 50_000 ether;
-        token.transfer(msg.sender, AIR_DROP);
-    }
+    // function getTestTokens() public {
+    //     uint256 AIR_DROP = 50_000 ether;
+    //     token.transfer(msg.sender, AIR_DROP);
+    // }
 
     ///////////////////////////
     // Internal Private Functions    //
@@ -406,6 +461,7 @@ contract ZiniSavings is ReentrancyGuard {
         bool isSecondBatch
     ) internal nonReentrant {
         Group storage group = groups[_groupId];
+        IERC20 token = group.groupToken;
 
         uint256 totalLoanWithInterest = loanAmount +
             ((loanAmount * LOAN_INTEREST_RATE) / 100);
@@ -422,21 +478,20 @@ contract ZiniSavings is ReentrancyGuard {
                 debt: totalLoanWithInterest,
                 fullyRepaid: false,
                 isFirstBatch: isFirstBatch,
-                isSecondBatch: isSecondBatch
+                isSecondBatch: isSecondBatch,
+                loanToken: token
             });
             creditScores[borrower].totalLoans += 1;
             group.hasReceivedLoan[borrower] = true;
-            emit LoanDistributed(_groupId, borrower, loanAmount, isFirstBatch);
+            emit LoanDistributed(
+                _groupId,
+                borrower,
+                loanAmount,
+                address(token),
+                isFirstBatch
+            );
             // }
         }
-
-        // if (isFirstBatch) {
-        //     group.firstHalfLoanDistributed = true;
-        //     group.secondHalfLoanDistributed = false;
-        // } else {
-        //     group.firstHalfLoanDistributed = false;
-        //     group.secondHalfLoanDistributed = true;
-        // }
     }
 
     ///////////////////////////
@@ -444,84 +499,144 @@ contract ZiniSavings is ReentrancyGuard {
     //////////////////////////
     // Add this function to your ZiniSavings contract
     function getFlexLoanMonthlyRepayment(
-        address borrower
-    ) public view returns (uint256) {
-        uint256 loanAmount = flexLoans[borrower];
-        console.log("loan amount is %d", loanAmount);
-        uint256 interestRate = getLoanInterestRate(borrower);
-        uint256 loanTermMonths = 12; // 12 months loan term
-        console.log("Interest rate is %d", interestRate);
+        address borrower,
+        address tokenAddress
+    )
+        public
+        view
+        returns (
+            uint256 monthlyPayment,
+            uint256 totalRepayment,
+            uint256 totalInterest
+        )
+    {
+        // Get the borrower's outstanding loan amount
+        uint256 loanAmount = flexLoans[tokenAddress][borrower];
+        require(loanAmount > 0, "No active loan");
 
-        // Use higher precision for calculations (multiply by 1e18)
-        uint256 precision = 1e18;
+        // Get the borrower's interest rate based on credit score
+        uint256 annualInterestRate = getLoanInterestRate(borrower);
+        uint256 loanTermMonths = 12; // Fixed 12 months term
 
-        // Calculate monthly interest rate with higher precision
-        uint256 monthlyInterestRate = (interestRate * precision) / 12 / 100;
-        console.log("Monthly interest rate (x1e18) is %d", monthlyInterestRate);
+        // Calculate total interest for the loan duration
+        totalInterest =
+            (loanAmount * annualInterestRate * loanTermMonths) /
+            (100 * 12);
 
-        // Calculate (1 + r)^n with higher precision
-        uint256 base = precision + monthlyInterestRate;
-        uint256 exponent = loanTermMonths;
-        uint256 basePower = precision;
-        // 1054980
+        // Calculate total repayment amount (principal + interest)
+        totalRepayment = loanAmount + totalInterest;
 
-        for (uint256 i = 0; i < exponent; i++) {
-            basePower = (basePower * base) / precision;
-        }
+        // Calculate fixed monthly payment
+        monthlyPayment = totalRepayment / loanTermMonths;
 
-        // Calculate numerator and denominator
-        uint256 numerator = loanAmount * monthlyInterestRate * basePower;
-        uint256 denominator = (basePower - precision) * precision;
+        return (monthlyPayment, totalRepayment, totalInterest);
+    }
 
-        // Calculate monthly repayment
-        uint256 monthlyRepayment = (loanAmount / loanTermMonths);
+    // Helper function to get remaining loan details
+    function getFlexLoanDetails(
+        address borrower,
+        address tokenAddress
+    )
+        public
+        view
+        returns (
+            uint256 remainingBalance,
+            uint256 monthlyPayment,
+            uint256 remainingMonths,
+            uint256 nextPaymentAmount
+        )
+    {
+        // Get the total outstanding loan amount
+        remainingBalance = flexLoans[tokenAddress][borrower];
+        require(remainingBalance > 0, "No active loan");
 
-        return monthlyRepayment;
+        // Get monthly payment details
+        (monthlyPayment, , ) = getFlexLoanMonthlyRepayment(
+            borrower,
+            tokenAddress
+        );
+
+        // Calculate remaining months
+        remainingMonths =
+            (remainingBalance + monthlyPayment - 1) /
+            monthlyPayment;
+
+        // Calculate next payment (might be less than monthly payment if it's the final payment)
+        nextPaymentAmount = remainingBalance < monthlyPayment
+            ? remainingBalance
+            : monthlyPayment;
+
+        return (
+            remainingBalance,
+            monthlyPayment,
+            remainingMonths,
+            nextPaymentAmount
+        );
     }
 
     function calculateCreditScore(address user) public view returns (uint256) {
         CreditScore memory score = creditScores[user];
-        uint256 userBalance = token.balanceOf(user);
 
-        // Base score for all users (20 points)
-        uint256 baseScore = 20;
+        // Base score (30 points max)
+        uint256 baseScore = 30;
 
-        // Repayment history (max 40 points)
+        // Loan repayment history (40 points max)
         uint256 repaymentScore;
-        if (score.totalLoans == 0) {
-            repaymentScore = 20; // Base score for new users
+        if (score.totalLoans > 0) {
+            // Calculate percentage of loans repaid
+            uint256 repaymentRate = (score.repaidLoans * 100) /
+                score.totalLoans;
+
+            // Convert repayment rate to score (40 points max)
+            repaymentScore = (repaymentRate * 40) / 100;
+
+            // Penalty for defaults
+            if (score.loanDefault > 0) {
+                uint256 defaultPenalty = (score.loanDefault * 10);
+                if (defaultPenalty > repaymentScore) {
+                    repaymentScore = 0;
+                } else {
+                    repaymentScore = repaymentScore - defaultPenalty;
+                }
+            }
         } else {
-            repaymentScore = ((score.repaidLoans * 40) / score.totalLoans);
-            // Bonus for no defaults
-            if (score.loanDefault == 0 && score.totalLoans > 0) {
-                repaymentScore += 5;
+            // No loan history - give half of max points
+            repaymentScore = 20;
+        }
+
+        // Savings history (30 points max)
+        uint256 savingsScore;
+        uint256 savingsThreshold = 1000 ether; // 1000 tokens as threshold
+
+        if (score.totalSavings > 0) {
+            if (score.totalSavings >= savingsThreshold) {
+                savingsScore = 30; // Max score for high savers
+            } else {
+                // Proportional score for smaller savings
+                savingsScore = (score.totalSavings * 30) / savingsThreshold;
             }
         }
 
-        // Savings history (max 25 points)
-        uint256 savingsInNaira = score.totalSavings / 1e18;
-        uint256 savingsScore;
-        if (savingsInNaira > 0) {
-            savingsScore = (log2(savingsInNaira + 1) * 25) / 10;
-            if (savingsScore > 25) savingsScore = 25;
-        }
-
-        // Current balance (max 15 points)
-        uint256 balanceInNaira = userBalance / 1e18;
-        uint256 balanceScore;
-        if (balanceInNaira > 0) {
-            balanceScore = (log2(balanceInNaira + 1) * 15) / 10;
-            if (balanceScore > 15) balanceScore = 15;
-        }
-
         // Calculate final score
-        uint256 creditScore = baseScore +
-            repaymentScore +
-            savingsScore +
-            balanceScore;
+        uint256 totalScore = baseScore + repaymentScore + savingsScore;
 
         // Cap at 100
-        return creditScore > 100 ? 100 : creditScore;
+        return totalScore > 100 ? 100 : totalScore;
+    }
+
+    // Helper function to get credit rating based on score
+    function getCreditRating(
+        uint256 score
+    ) public pure returns (string memory) {
+        if (score >= 80) {
+            return "Excellent";
+        } else if (score >= 60) {
+            return "Good";
+        } else if (score >= 40) {
+            return "Fair";
+        } else {
+            return "Poor";
+        }
     }
 
     function log2(uint256 x) internal pure returns (uint256) {
@@ -598,6 +713,12 @@ contract ZiniSavings is ReentrancyGuard {
         return groups[_groupId].monthlyContribution;
     }
 
+    function getGroupSavingToken(
+        int256 _groupId
+    ) external view returns (IERC20) {
+        return groups[_groupId].groupToken;
+    }
+
     function getGroupTotalSavings(
         int256 _groupId
     ) public view returns (uint256) {
@@ -630,9 +751,9 @@ contract ZiniSavings is ReentrancyGuard {
         return groups[_groupId].repaidLoan;
     }
 
-    function getContractTokenBalance() public view returns (uint256) {
-        return token.balanceOf(address(this));
-    }
+    // function getContractTokenBalance() public view returns (uint256) {
+    //     return token.balanceOf(address(this));
+    // }
 
     function getUserGroups(
         address user

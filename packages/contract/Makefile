@@ -42,7 +42,7 @@ ifeq ($(findstring --network sepolia,$(ARGS)),--network sepolia)
 endif
 
 ifeq ($(findstring --network liskSepolia,$(ARGS)),--network liskSepolia)
-	NETWORK_ARGS := --rpc-url $(LISK_SEPOLIA_RPC_URL) --private-key $(PRIVATE_KEY) --broadcast --etherscan-api-key 123 --verify --verifier blockscout  --verifier-url https://sepolia-blockscout.lisk.com/api  -vvvv
+	NETWORK_ARGS := --rpc-url $(LISK_SEPOLIA_RPC_URL) --private-key $(PRIVATE_KEY2) --broadcast --etherscan-api-key 123 --verify --verifier blockscout  --verifier-url https://sepolia-blockscout.lisk.com/api  -vvvv
 endif
 
 ifeq ($(findstring --network scrollSepolia,$(ARGS)),--network scrollSepolia)

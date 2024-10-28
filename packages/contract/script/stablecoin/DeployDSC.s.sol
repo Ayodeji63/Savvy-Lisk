@@ -8,7 +8,7 @@ import {DSCEngine} from "../../src/DSCEngine.sol";
 import {HelperConfig} from "./HelperConfig.s.sol";
 
 contract DeployDSC is Script {
-    address private initialOwner = vm.envAddress("INITIAL_OWNER");
+    address private initialOwner = vm.envAddress("INITIAL_OWNER2");
 
     address wethUsdPriceFeed;
     address wbtcUsdPriceFeed;

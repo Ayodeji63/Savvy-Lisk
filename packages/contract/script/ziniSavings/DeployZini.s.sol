@@ -8,13 +8,17 @@ import {HelperConfig} from "./HelperConfig.s.sol";
 
 contract DeployZini is Script {
     address tokenAddress;
+    address usdtAddress;
     uint256 deployerKey;
 
     function run() external returns (ZiniSavings, HelperConfig) {
         HelperConfig config = new HelperConfig();
-        (tokenAddress, deployerKey) = config.activeNetworkConfig();
+        (tokenAddress, usdtAddress, deployerKey) = config.activeNetworkConfig();
         vm.startBroadcast();
-        ZiniSavings zini = new ZiniSavings(tokenAddress);
+        address[] memory tokens = new address[](2);
+        tokens[0] = address(tokenAddress);
+        tokens[1] = address(usdtAddress);
+        ZiniSavings zini = new ZiniSavings(tokens);
         vm.stopBroadcast();
         return (zini, config);
     }
