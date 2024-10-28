@@ -26,10 +26,10 @@ pragma solidity ^0.8.20;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {AutomationCompatibleInterface} from "@chainlink/contracts/src/v0.8/interfaces/AutomationCompatibleInterface.sol";
+// import {AutomationCompatibleInterface} from "@chainlink/contracts/src/v0.8/interfaces/AutomationCompatibleInterface.sol";
 import {console} from "forge-std/console.sol";
 
-contract ZiniSavings is ReentrancyGuard, AutomationCompatibleInterface {
+contract ZiniSavings is ReentrancyGuard {
     ///////////////
     // error /////
     //////////////
@@ -252,8 +252,11 @@ contract ZiniSavings is ReentrancyGuard, AutomationCompatibleInterface {
     )
         external
         view
-        override
-        returns (bool upkeepNeeded, bytes memory performData)
+        returns (
+            // override
+            bool upkeepNeeded,
+            bytes memory performData
+        )
     {
         int256[] memory eligibleGroups = new int256[](groupCount);
         uint256 eligibleCount = 0;
@@ -271,7 +274,8 @@ contract ZiniSavings is ReentrancyGuard, AutomationCompatibleInterface {
         return (upkeepNeeded, performData);
     }
 
-    function performUpkeep(bytes calldata performData) external override {
+    function performUpkeep(bytes calldata performData) external // override
+    {
         (int256[] memory eligibleGroups, uint256 eligibleCount) = abi.decode(
             performData,
             (int256[], uint256)
