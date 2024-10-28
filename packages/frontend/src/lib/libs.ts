@@ -3,10 +3,10 @@ import { client } from "@/app/client";
 import { contractAddress } from "@/contract";
 import { getContract } from "thirdweb";
 import { defineChain } from "thirdweb/chains";
-import { tokenAddress } from "@/token";
+import { tokenAddress, usdtAddress } from "@/token";
 import { formatEther } from "viem";
 
-export const baseSepolia = defineChain(84532);
+export const baseSepolia = defineChain(4202);
 
 export const contractInstance = getContract({
   client: client,
@@ -20,6 +20,12 @@ export const tokenContract = getContract({
   client: client,
   chain: baseSepolia,
   address: tokenAddress,
+});
+
+export const tokenUsdtContract = getContract({
+  client: client,
+  chain: baseSepolia,
+  address: usdtAddress,
 });
 
 export function formatViemBalance(balance: bigint): string {
