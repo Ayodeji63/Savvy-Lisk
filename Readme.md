@@ -21,7 +21,6 @@ SavvyCircle aims to address the financial inclusion challenges faced by small bu
 ## Features
 
 - **ROSCA as a Service**: Members can easily create and manage saving groups on Telegram through the SavvyCircle bot. The platform enables seamless savings, lending, and borrowing within a trusted, decentralized framework.
-- **Automated Loan Distribution**: Using Chainlink Automation, the system ensures timely and fair loan distribution, reducing the reliance on centralized intermediaries.
 - **Telegram Integration**: Groups can manage their savings and lending operations directly through the Telegram app, creating a social experience where group communication and financial transactions are integrated.
 - **Transparent Transactions**: Every transaction within the group is visible and verifiable, eliminating any concerns about mismanagement or fraud.
 - **Stablecoin for Naira Pegged Transactions**: SavvyCircle introduces a stablecoin pegged to the Naira, allowing borderless payments and transactions within the platform without currency volatility.
@@ -29,8 +28,9 @@ SavvyCircle aims to address the financial inclusion challenges faced by small bu
 
 ## Smart Contract
 
-- [NairaStableCoin(NGNS)](https://sepolia.basescan.org/token/0xf998be67ea24466978a102d9f4ad03bf27aeeed3)
-- [SavvyCircle-Contract](https://sepolia.basescan.org/address/0x750c8db6e8df2d8ecfc57b99a4bc58aecf0f4c86)
+- [NairaStableCoin(NGNS)](https://sepolia-blockscout.lisk.com/address/0x51fFE9c39Cd46646B9225E6dD3A298E9c1946Dd2)
+- [SavvyCircle-Contract](https://sepolia-blockscout.lisk.com/address/0x8dCA1E0608144164B528556cf9D6aae790665d87)
+- [Test USDT](https://sepolia-blockscout.lisk.com/token/0x69C27fa8C6975E5Ae3eb41B83C1d840bDD1ec4ec)
 
 The core of SavvyCircle is the `SavvySavings` smart contract. Key components include:
 
@@ -38,7 +38,6 @@ The core of SavvyCircle is the `SavvySavings` smart contract. Key components inc
 - **Group Management**: Smart contracts facilitate group creation, user enrollment, and contribution tracking.
 - **Loan Mechanism**: Loans are automatically distributed based on preset conditions (e.g., contributions, repayment history).
 - **Repayment Tracking**: The contract keeps track of outstanding loans and repayments with built-in penalties for late payments.
-- **Chainlink Automation**: Automates critical processes like loan distribution to ensure no central authority is required to handle operations.
 
 Here's how you can update the **How It Works** section with a note about the bot's cold start behavior:
 
