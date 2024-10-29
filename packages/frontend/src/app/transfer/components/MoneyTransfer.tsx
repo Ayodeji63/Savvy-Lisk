@@ -345,7 +345,7 @@ const MoneyTransfer = () => {
         </div>
         {transactions && (
           <div className="container mx-auto p-4">
-            <TransactionsList transactions={transactions} />
+            <TransactionsList transactions={transactions.slice(0, 4)} />
           </div>
         )}
       </main>

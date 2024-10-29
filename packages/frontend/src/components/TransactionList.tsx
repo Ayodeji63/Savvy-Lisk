@@ -54,7 +54,7 @@ const TransactionsList: React.FC<{ transactions: Transaction[] }> = ({ transacti
     }
 
     const openBaseScan = (transactionHash: string) => {
-        window.open(`https://sepolia.basescan.org/tx/${transactionHash}`, '_blank');
+        window.open(`https://sepolia-blockscout.lisk.com/tx/${transactionHash}`, '_blank');
     }
 
     return (
