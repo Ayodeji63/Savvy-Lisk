@@ -14,6 +14,16 @@ export async function createUser(params: userSchema) {
     return user;
 }
 export async function createTransaction(params: transactionSchema) {
+    // First find the user
+    const user = await prisma.user.findUnique({
+        where: { username: params.fromAddress }
+    });
+
+    if (!user) {
+        throw new Error('User not found');
+    }
+
+    // Then create the transaction
     await prisma.transaction.create({
         data: {
             fromAddress: params.fromAddress,
@@ -22,8 +32,9 @@ export async function createTransaction(params: transactionSchema) {
             type: params.type,
             transactionHash: params.transactionHash,
             status: params.status,
-            user: { connect: { username: params.fromAddress } }
-
+            user: {
+                connect: { id: user.id }
+            }
         }
     })
 }

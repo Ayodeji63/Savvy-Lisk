@@ -106,7 +106,7 @@ const DashboardPage = () => {
         <div className="container mx-auto p-4">
           {transactions ? (
             transactions.length > 0 ? (
-              <TransactionsList transactions={transactions.slice(0, 5)} />
+              <TransactionsList transactions={transactions.reverse().slice(-5)} />
             ) : (
               <p>No transactions found.</p>
             )
