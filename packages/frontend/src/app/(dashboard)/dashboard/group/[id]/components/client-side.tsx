@@ -28,12 +28,12 @@ import GroupInfoCard from "./group-info-card";
 import { useActiveAccount, useReadContract } from "thirdweb/react";
 import { getContract, prepareContractCall, sendTransaction } from "thirdweb";
 import { client } from "@/app/client";
-import { contractInstance, baseSepolia, tokenContract } from "@/lib/libs";
+import { contractInstance, baseSepolia, tokenContract, tokenUsdtContract, TOKEN, TokenMap } from "@/lib/libs";
 import { contractAddress } from "@/contract";
 import { group } from "console";
 import { formatEther, parseEther } from "viem";
 import { Card, useAuthContext } from "@/context/AuthContext";
-import { tokenAddress } from "@/token";
+import { tokenAddress, usdtAddress } from "@/token";
 import { notification } from "@/utils/notification";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { transactionSchema } from "@/types/utils";
@@ -75,9 +75,39 @@ const GroupPageClientSide = ({ id }: any) => {
   } = useReadContract({
     contract: contractInstance,
     method:
-      "function groups(int256) returns (uint256,uint256,uint256,uint256,uint256,bool,bool,bool,uint256,string,address,uint256)",
-    params: [BigInt(id)],
+      "function groups(int256) returns (uint256,uint256,uint256,uint256,uint256,bool,bool,bool,uint256,string,address,uint256,uint256,uint256,bool,address)",
+    params: [BigInt(id ?? 0)],
   });
+
+  console.log(groupData);
+
+  const isValidTokenKey = (key: string) => {
+    return key === tokenAddress || key === usdtAddress;
+  }
+  const symbol = () => {
+    if (!groupData) {
+      return;
+    }
+
+    const tokenKey = groupData[15];
+    if (typeof tokenKey === 'string' && isValidTokenKey(tokenKey)) {
+      if (tokenKey === tokenAddress) {
+        console.log(TOKEN.tokenAddress.symbol)
+        return TOKEN.tokenAddress.symbol;
+      } else if (tokenKey === usdtAddress) {
+        console.log(TOKEN.usdtAddress.symbol);
+
+        return TOKEN.usdtAddress.symbol;
+      } else {
+        // Handle the case where groupData[15] is not a valid key
+        return '';
+      }
+
+      // return TOKEN[tokenKey].symbol
+    }
+  }
+
+  const sym = symbol();
 
   const {
     data: loanData,
@@ -90,7 +120,6 @@ const GroupPageClientSide = ({ id }: any) => {
     params: [account ? account?.address : "0x", BigInt(id)],
   });
 
-  console.log(loanData);
 
   const {
     register,
@@ -134,14 +163,14 @@ const GroupPageClientSide = ({ id }: any) => {
             case 0:
               return {
                 ...card,
-                value: `#${String(formatViemBalance(groupData[1]))}`,
+                value: `${sym}${String(formatViemBalance(groupData[1]))}`,
               };
             case 1:
               return { ...card, value: String(groupData[11]) };
             case 2:
               return {
                 ...card,
-                value: `#${String(formatViemBalance(groupData[2]))}`,
+                value: `${sym}${String(formatViemBalance(groupData[2]))}`,
               };
             default:
               return card;
@@ -168,9 +197,35 @@ const GroupPageClientSide = ({ id }: any) => {
 
   const approve = async (amount: number) => {
     try {
-      setLoanText("Approving...");
+      // Check if groupData exists and has the expected property
+      if (!groupData) {
+        notification.error("Group data not available");
+        return;
+      }
+
+      if (!groupData[15]) {
+        notification.error("An error occured, Try Again!")
+        return;
+      }
+      if (!amount) {
+        notification.error("Please enter deposit amount");
+        return;
+      }
+
+      const address = groupData[15];
+
+      let contract;
+      if (address == tokenAddress) {
+        contract = tokenContract;
+      } else if (address == usdtAddress) {
+        contract = tokenUsdtContract;
+      }
+
+      console.log(contract);
+
+
       const transaction = prepareContractCall({
-        contract: tokenContract,
+        contract: contract ?? tokenContract,
         method: "function approve(address, uint256) returns(bool)",
         params: [contractAddress, parseEther(String(amount))],
       });
@@ -305,7 +360,7 @@ const GroupPageClientSide = ({ id }: any) => {
                       Recent loan borrowed by you + Interest 5%
                     </p>
                     <p className="text-sm font-medium leading-4 text-[#696F8C]">
-                      {loanData ? `#${formatViemBalance(loanData[0])}` : "----"}
+                      {loanData ? `${sym}${formatViemBalance(loanData[0])}` : "----"}
                     </p>
                   </div>
                   <div className="space-y-1 pl-[31px] text-center">
@@ -313,7 +368,7 @@ const GroupPageClientSide = ({ id }: any) => {
                       Total loan left to be repaid by you
                     </p>
                     <p className="text-sm font-medium leading-4 text-[#696F8C]">
-                      {loanData ? `#${formatViemBalance(loanData[4])}` : "----"}
+                      {loanData ? `${sym}${formatViemBalance(loanData[4])}` : "----"}
                     </p>
                   </div>
                 </div>
@@ -360,7 +415,7 @@ const GroupPageClientSide = ({ id }: any) => {
                                     className="h-8 w-[67px] text-xs font-normal leading-[14px] text-[#696F8C]"
                                     onClick={() => handleAmountInput(amount)}
                                   >
-                                    #{numeral(amount).format("0,0")}
+                                    {sym}{numeral(amount).format("0,0")}
                                   </Button>
                                 ))}
                               </div>
@@ -401,7 +456,7 @@ const GroupPageClientSide = ({ id }: any) => {
                   text="Total loan given out"
                   value={
                     groupData[2]
-                      ? `#${String(formatViemBalance(groupData[2]))}`
+                      ? `${sym}${String(formatViemBalance(groupData[2]))}`
                       : "0"
                   }
                   icon="requestLoan"
@@ -410,7 +465,7 @@ const GroupPageClientSide = ({ id }: any) => {
                   text="Total repaid"
                   value={
                     groupData[2]
-                      ? `#${String(formatViemBalance(groupData[3]))}`
+                      ? `${sym}${String(formatViemBalance(groupData[3]))}`
                       : "0"
                   }
                   icon="repayLoan"
@@ -440,56 +495,7 @@ const GroupPageClientSide = ({ id }: any) => {
                   </Button>
                 </div>
               )}
-            {/* Recent transactions */}
-            {/* <div className="space-y-2">
-              <h1 className="text-base font-semibold leading-[18px] text-[#0A0F29]">
-                Recent Transactions
-              </h1>
 
-              <div className="flex items-center justify-between rounded-[8px] border border-[#D7D9E4] bg-white px-4 py-5 shadow-[0px_4px_8px_0px_#0000000D]">
-                <div className="flex items-center gap-x-3">
-                  <Icons.bitcoinBag className="h-10 w-10" />
-                  <div>
-                    <p className="text-base font-normal leading-[18px] text-[#0A0F29]">
-                      Group 3
-                    </p>
-                    <p className="text-xs font-normal leading-[14px] text-[#696F8C]">
-                      Today at 12:45pm
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-base font-medium leading-[18px] text-[#0A0F29]">
-                    #10,000
-                  </p>
-                  <p className="flex justify-end text-xs font-normal leading-[14px] text-[#098C28]">
-                    Deposit
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between rounded-[8px] border border-[#D7D9E4] bg-white px-4 py-5 shadow-[0px_4px_8px_0px_#0000000D]">
-                <div className="flex items-center gap-x-3">
-                  <Icons.bitcoinBag className="h-10 w-10" />
-                  <div>
-                    <p className="text-base font-normal leading-[18px] text-[#0A0F29]">
-                      Group 3
-                    </p>
-                    <p className="text-xs font-normal leading-[14px] text-[#696F8C]">
-                      Today at 12:45pm
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-base font-medium leading-[18px] text-[#0A0F29]">
-                    #10,000
-                  </p>
-                  <p className="flex justify-end text-xs font-normal leading-[14px] text-[#B90F0F]">
-                    Loan
-                  </p>
-                </div>
-              </div>
-            </div> */}
           </div>
         </PageWrapper>
       )}

@@ -375,8 +375,6 @@ contract ZiniSavings is ReentrancyGuard {
             );
             group.secondHalfLoanDistributed = true;
         }
-
-        group.loanGivenOut += group.monthlyContribution * 3;
     }
 
     function repayLoan(int256 _groupId, uint256 _amount) external {
@@ -462,6 +460,7 @@ contract ZiniSavings is ReentrancyGuard {
     ) internal nonReentrant {
         Group storage group = groups[_groupId];
         IERC20 token = group.groupToken;
+        group.loanGivenOut += loanAmount;
 
         uint256 totalLoanWithInterest = loanAmount +
             ((loanAmount * LOAN_INTEREST_RATE) / 100);

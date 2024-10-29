@@ -5,7 +5,7 @@ import { Icons } from "@/components/common/icons";
 import { Label } from "@/components/ui/label";
 import { RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuthContext } from "@/context/AuthContext";
-import { contractInstance, tokenContract } from "@/lib/libs";
+import { contractInstance, tokenContract, tokenUsdtContract } from "@/lib/libs";
 import { cn } from "@/lib/utils";
 import { PlusCircle, Info, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -28,6 +28,7 @@ import { notification } from "@/utils/notification";
 import { transactionSchema } from "@/types/utils";
 import { createTransaction } from "@/actions/actions";
 import { findUserTransactions } from "@/lib/user";
+import { tokenAddress, usdtAddress } from "@/token";
 
 interface GroupProps {
   id: bigint;
@@ -60,21 +61,62 @@ const GroupRadio: React.FC<GroupProps> = ({
 
   const account = useActiveAccount();
 
+  const {
+    data: groupData,
+    isLoading: idLoading,
+    refetch: refetchGroupData,
+  } = useReadContract({
+    contract: contractInstance,
+    method:
+      "function groups(int256) returns (uint256,uint256,uint256,uint256,uint256,bool,bool,bool,uint256,string,address,uint256,uint256,uint256,bool,address)",
+    params: [BigInt(id ?? 0)],
+  });
+
+  console.log(`Group Data for ${groupId} is `);
+  console.log(groupData);
+
+  if (groupData) {
+    console.log(groupData[15]);
+  }
+
+
   const approve = async () => {
     try {
+      // Check if groupData exists and has the expected property
+      if (!groupData) {
+        notification.error("Group data not available");
+        return;
+      }
+
+      if (!groupData[14]) {
+        notification.error("An error occured, Try Again!")
+        return;
+      }
+      if (!depositAmount) {
+        notification.error("Please enter deposit amount");
+        return;
+      }
+
+      const address = groupData[15];
+
+      let contract;
+      if (address == tokenAddress) {
+        contract = tokenContract;
+      } else if (address == usdtAddress) {
+        contract = tokenUsdtContract;
+      }
+
+      console.log(contract);
+
+
       const transaction = prepareContractCall({
-        contract: tokenContract,
+        contract: contract ?? tokenContract,
         method: "function approve(address, uint256) returns(bool)",
-        params: [contractAddress, parseEther(String(100000000000000000000))],
+        params: [contractAddress, parseEther(String(depositAmount))],
       });
 
       if (!account) return;
       setText("Approving....");
-
-      const result = await sendTransaction({
-        account,
-        transaction,
-      });
       const waitForReceiptOptions = await sendTransaction({
         account,
         transaction,
@@ -90,7 +132,10 @@ const GroupRadio: React.FC<GroupProps> = ({
     try {
       console.log(`GroupId is given as `, groupId);
 
-      if (!groupId) return;
+      if (!groupId) {
+        notification.error("Group ID is required");
+        return;
+      }
       const transaction = prepareContractCall({
         contract: contractInstance,
         method: "function deposit(int256)",
@@ -143,16 +188,6 @@ const GroupRadio: React.FC<GroupProps> = ({
     }
   };
 
-  const {
-    data: groupData,
-    isLoading: idLoading,
-    refetch: refetchGroupData,
-  } = useReadContract({
-    contract: contractInstance,
-    method:
-      "function groups(int256) returns (uint256,uint256,uint256,uint256,uint256,bool,bool,bool,uint256,string,address,uint256)",
-    params: [id],
-  });
 
   useEffect(() => {
     if (groupData) {

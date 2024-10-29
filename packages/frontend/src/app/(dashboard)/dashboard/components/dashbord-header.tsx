@@ -23,11 +23,11 @@ import { useActiveAccount, useReadContract } from "thirdweb/react";
 import { client } from "@/app/client";
 import { abi, contractAddress } from "@/contract";
 import { defineChain } from "thirdweb/chains";
-import { tokenAbi, tokenAddress } from "@/token";
+import { tokenAbi, tokenAddress, usdtAddress } from "@/token";
 import { formatEther } from "viem";
 import React, { useEffect, useState } from "react";
 import { useAuthContext } from "@/context/AuthContext";
-import { contractInstance, tokenContract, tokenUsdtContract } from "@/lib/libs";
+import { contractInstance, TOKEN, tokenContract, tokenUsdtContract } from "@/lib/libs";
 import { notification } from "@/utils/notification";
 import { useRouter } from "next/navigation";
 import { ChevronDown } from 'lucide-react';
@@ -44,6 +44,7 @@ interface ActionButtonProps {
 interface Currency {
   code: string;
   name: string;
+  address: string;
 }
 
 interface CurrencySelectorProps {
@@ -52,8 +53,8 @@ interface CurrencySelectorProps {
 }
 
 const currencies: Currency[] = [
-  { code: 'USDT', name: 'US Dollar' },
-  { code: 'NGNS', name: 'Stable Naira' },
+  { code: 'USDT', name: 'US Dollar', address: usdtAddress },
+  { code: 'NGNS', name: 'Naira', address: tokenAddress },
 ];
 
 const ActionButton: React.FC<ActionButtonProps> = ({
@@ -153,6 +154,34 @@ const DashboardHeader = () => {
     params: [],
   });
 
+  const isValidTokenKey = (key: string) => {
+    return key === tokenAddress || key === usdtAddress;
+  }
+  const symbol = () => {
+    if (!selectedCurrency) {
+      return;
+    }
+
+    const tokenKey = selectedCurrency.address;
+    if (typeof tokenKey === 'string' && isValidTokenKey(tokenKey)) {
+      if (tokenKey === tokenAddress) {
+        console.log(TOKEN.tokenAddress.symbol)
+        return TOKEN.tokenAddress.symbol;
+      } else if (tokenKey === usdtAddress) {
+        console.log(TOKEN.usdtAddress.symbol);
+
+        return TOKEN.usdtAddress.symbol;
+      } else {
+        // Handle the case where groupData[15] is not a valid key
+        return '';
+      }
+
+      // return TOKEN[tokenKey].symbol
+    }
+  }
+
+  const sym = symbol();
+
   function transfer() {
     try {
       router.push("/transfer");
@@ -187,7 +216,7 @@ const DashboardHeader = () => {
 
 
               <p className="text-3xl mt-2 mb-2 font-bold leading-6">
-                {formatViemBalance(
+                {sym} {formatViemBalance(
                   selectedCurrency?.code === "NGNS"
                     ? (userBalance ?? BigInt(0))
                     : selectedCurrency?.code === "USDT"

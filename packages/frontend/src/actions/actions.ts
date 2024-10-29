@@ -13,19 +13,7 @@ export async function createUser(params: userSchema) {
 
     return user;
 }
-
 export async function createTransaction(params: transactionSchema) {
-    // First, find the user by their address
-    const user = await prisma.user.findFirst({
-        where: {
-            address: params.fromAddress
-        }
-    });
-
-    if (!user) {
-        throw new Error('User not found');
-    }
-
     await prisma.transaction.create({
         data: {
             fromAddress: params.fromAddress,
@@ -34,12 +22,8 @@ export async function createTransaction(params: transactionSchema) {
             type: params.type,
             transactionHash: params.transactionHash,
             status: params.status,
-            // Connect using the userId instead of username
-            user: {
-                connect: {
-                    id: user.id
-                }
-            }
+            user: { connect: { username: params.fromAddress } }
+
         }
     })
 }

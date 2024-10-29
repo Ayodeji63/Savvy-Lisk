@@ -5,8 +5,31 @@ import { getContract } from "thirdweb";
 import { defineChain } from "thirdweb/chains";
 import { tokenAddress, usdtAddress } from "@/token";
 import { formatEther } from "viem";
+import { symbol } from "zod";
 
 export const baseSepolia = defineChain(4202);
+
+
+export interface TokenInfo {
+  name: string;
+  symbol: string;
+}
+
+export interface TokenMap {
+  tokenAddress: TokenInfo;
+  usdtAddress: TokenInfo
+}
+
+export const TOKEN: TokenMap = {
+  tokenAddress: {
+    name: "NGNS",
+    symbol: "₦"
+  },
+  usdtAddress: {
+    name: "USDT",
+    symbol: "$"
+  }
+}
 
 export const contractInstance = getContract({
   client: client,

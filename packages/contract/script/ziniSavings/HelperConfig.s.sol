@@ -44,13 +44,13 @@ contract HelperConfig is Script {
     function getOtherChainConfig() public returns (NetworkConfig memory) {
         vm.startBroadcast();
         // ERC20Mock _token = new ERC20Mock();
-        USDT _usdt = new USDT();
+        // USDT _usdt = new USDT();
         vm.stopBroadcast();
         // 0x4cbeb5E0793b6b741E32D20349A33938Fe9eCF3f
         return
             NetworkConfig({
                 token: 0x51fFE9c39Cd46646B9225E6dD3A298E9c1946Dd2,
-                usdt: address(_usdt),
+                usdt: 0x69C27fa8C6975E5Ae3eb41B83C1d840bDD1ec4ec,
                 deployerKey: vm.envUint("PRIVATE_KEY")
             });
     }

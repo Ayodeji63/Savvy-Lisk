@@ -36,9 +36,9 @@ import { client } from "@/app/client";
 import { abi, contractAddress } from "@/contract";
 import { defineChain } from "thirdweb/chains";
 import { bigint } from "zod";
-import { contractInstance, tokenContract } from "@/lib/libs";
+import { contractInstance, tokenContract, tokenUsdtContract } from "@/lib/libs";
 // import Group from "../components/group";
-import { tokenAddress } from "@/token";
+import { tokenAddress, usdtAddress } from "@/token";
 import GroupRadio from "./components/radiogroup";
 import { useAuthContext } from "@/context/AuthContext";
 import { formatEther, Hash, parseEther } from "viem";
@@ -48,6 +48,7 @@ import WelcomeBanner from "./components/WelcomeBanner";
 import QuickStats from "./components/QuickStats";
 import SavingsTips from "./components/SavingsTips";
 import FloatingNavBar from "../Navbar";
+import { notification } from "@/utils/notification";
 
 const depositSchema = object({
   group: string().required("group is required"),
@@ -83,10 +84,54 @@ const DepositPage = () => {
 
   const account = useActiveAccount();
 
+  const {
+    data: groupData,
+    isLoading: idLoading,
+    refetch: refetchGroupData,
+  } = useReadContract({
+    contract: contractInstance,
+    method:
+      "function groups(int256) returns (uint256,uint256,uint256,uint256,uint256,bool,bool,bool,uint256,string,address,uint256,uint256,uint256,bool,address)",
+    params: [BigInt(groupId ?? 0)],
+  });
+
+  console.log(`Group Data for ${groupId} is `);
+  console.log(groupData);
+
+  if (groupData) {
+    console.log(groupData[15]);
+  }
+
+
   const approve = async () => {
     try {
+      // Check if groupData exists and has the expected property
+      if (!groupData) {
+        notification.error("Group data not available");
+        return;
+      }
+
+      if (!groupData[14]) {
+        notification.error("An error occured, Try Again!")
+        return;
+      }
+      if (!depositAmount) {
+        notification.error("Please enter deposit amount");
+        return;
+      }
+
+      const address = groupData[15];
+
+      let contract;
+      if (address == tokenAddress) {
+        contract = tokenContract;
+      } else if (address == usdtAddress) {
+        contract = tokenUsdtContract;
+      }
+
+
       const transaction = prepareContractCall({
-        contract: tokenContract,
+        contract: contract ?? tokenContract,
         method: "function approve(address, uint256) returns(bool)",
         params: [contractAddress, parseEther(String(depositAmount))],
       });
@@ -108,7 +153,10 @@ const DepositPage = () => {
     try {
       console.log(`GroupId is given as `, groupId);
 
-      if (!groupId) return;
+      if (!groupId) {
+        notification.error("Group ID is required");
+        return;
+      }
       const transaction = prepareContractCall({
         contract: contractInstance,
         method: "function deposit(int256)",
@@ -150,6 +198,8 @@ const DepositPage = () => {
     method: "function getUserGroups(address) returns (int256[])",
     params: [account?.address ?? "0x00000000"],
   });
+
+  console.log('User group is', _userGroupId);
 
   const {
     data: userTotalSavings,
