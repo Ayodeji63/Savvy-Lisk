@@ -1,4 +1,4 @@
-![](https://img.shields.io/badge/Base-Buildathon-blue)
+![](https://img.shields.io/badge/Lisk-Hackathon-blue)
 
 # SavvyCircle: Micro-Lending Platform for African Small Business Owners
 
@@ -17,6 +17,8 @@ SavvyCircle is a decentralized micro-lending platform designed to empower small 
 ## Overview
 
 SavvyCircle aims to address the financial inclusion challenges faced by small business owners in Africa. By utilizing smart contracts on the blockchain, we've created a platform that allows users to form savings groups, contribute funds, and access loans in a transparent and automated manner.
+
+- **SavvyCircle Bot**: [SavvyBot](https://t.me/SavvyLiskBot)
 
 ## Features
 
